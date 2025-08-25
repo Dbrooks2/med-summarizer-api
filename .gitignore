@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Data / Artifacts
+data/
+*.npz
+*.joblib
+*.csv
+*.tsv
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

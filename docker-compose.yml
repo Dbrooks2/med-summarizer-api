@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/mnt/data
+    environment:
+      RETRIEVER_VECTORIZER_PATH: /mnt/data/retrieval_tfidf.joblib
+      RETRIEVAL_MATRIX_PATH: /mnt/data/retrieval_matrix.npz
+      RETRIEVAL_CORPUS_PATH: /mnt/data/retrieval_corpus.csv
