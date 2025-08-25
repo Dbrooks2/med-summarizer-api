@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedAI Summarizer - Medical Report Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .loading {
+            display: none;
+        }
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div class="flex items-center">
+                    <i class="fas fa-heartbeat text-3xl mr-3"></i>
+                    <h1 class="text-2xl font-bold">MedAI Summarizer</h1>
+                </div>
+                <div class="hidden md:flex space-x-6">
+                    <a href="#features" class="hover:text-blue-200 transition">Features</a>
+                    <a href="#pricing" class="hover:text-blue-200 transition">Pricing</a>
+                    <a href="#contact" class="hover:text-blue-200 transition">Contact</a>
+                </div>
+                <button class="bg-white text-purple-600 px-6 py-2 rounded-full font-semibold hover:bg-gray-100 transition">
+                    Get Started
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="gradient-bg text-white py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-5xl font-bold mb-6">
+                Transform Medical Reports into Clear Insights
+            </h2>
+            <p class="text-xl mb-8 max-w-3xl mx-auto">
+                Upload medical reports, clinical notes, or patient records and get AI-powered summaries, 
+                key findings, and actionable insights in seconds.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onclick="scrollToUpload()" class="bg-white text-purple-600 px-8 py-3 rounded-full font-semibold text-lg hover:bg-gray-100 transition">
+                    <i class="fas fa-upload mr-2"></i>Try It Now
+                </button>
+                <button onclick="scrollToDemo()" class="border-2 border-white text-white px-8 py-3 rounded-full font-semibold text-lg hover:bg-white hover:text-purple-600 transition">
+                    <i class="fas fa-play mr-2"></i>Watch Demo
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Upload Section -->
+    <section id="upload" class="py-16 bg-white">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h3 class="text-3xl font-bold text-gray-900 mb-4">Upload Your Medical Report</h3>
+                <p class="text-gray-600">Get instant AI-powered analysis and summaries</p>
+            </div>
+
+            <!-- Upload Form -->
+            <div class="bg-white rounded-lg shadow-xl p-8 border-2 border-dashed border-gray-300 hover:border-purple-400 transition">
+                <div class="text-center">
+                    <i class="fas fa-file-medical text-6xl text-gray-400 mb-4"></i>
+                    <h4 class="text-xl font-semibold text-gray-900 mb-2">Drop your medical report here</h4>
+                    <p class="text-gray-600 mb-6">or click to browse files</p>
+                    
+                    <input type="file" id="fileInput" accept=".txt,.pdf,.doc,.docx" class="hidden">
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition">
+                        Choose File
+                    </button>
+                </div>
+
+                <!-- Text Input Alternative -->
+                <div class="mt-8">
+                    <div class="border-t pt-8">
+                        <h5 class="text-lg font-semibold text-gray-900 mb-4">Or paste text directly:</h5>
+                        <textarea id="textInput" rows="6" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="Paste your medical report text here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Analysis Options -->
+                <div class="mt-6">
+                    <h5 class="text-lg font-semibold text-gray-900 mb-4">Analysis Options:</h5>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="summary" checked class="mr-2 text-purple-600">
+                            <span>Generate Summary</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="keyFindings" checked class="mr-2 text-purple-600">
+                            <span>Extract Key Findings</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="recommendations" class="mr-2 text-purple-600">
+                            <span>Generate Recommendations</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="mt-8 text-center">
+                    <button id="analyzeBtn" onclick="analyzeReport()" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:from-purple-700 hover:to-blue-700 transition transform hover:scale-105">
+                        <i class="fas fa-magic mr-2"></i>Analyze Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results" class="py-16 bg-gray-50 hidden">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h3 class="text-3xl font-bold text-gray-900 mb-4">Analysis Results</h3>
+                <p class="text-gray-600">Your AI-powered medical report analysis</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                <p class="mt-4 text-gray-600">Analyzing your medical report...</p>
+            </div>
+
+            <!-- Results Content -->
+            <div id="resultsContent" class="hidden">
+                <!-- Summary Card -->
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-6 card-hover">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-file-alt text-2xl text-purple-600 mr-3"></i>
+                        <h4 class="text-xl font-semibold text-gray-900">Executive Summary</h4>
+                    </div>
+                    <div id="summaryContent" class="text-gray-700 leading-relaxed"></div>
+                </div>
+
+                <!-- Key Findings Card -->
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-6 card-hover">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-search text-2xl text-blue-600 mr-3"></i>
+                        <h4 class="text-xl font-semibold text-gray-900">Key Findings</h4>
+                    </div>
+                    <div id="findingsContent" class="text-gray-700"></div>
+                </div>
+
+                <!-- Recommendations Card -->
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-6 card-hover">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-lightbulb text-2xl text-yellow-600 mr-3"></i>
+                        <h4 class="text-xl font-semibold text-gray-900">Recommendations</h4>
+                    </div>
+                    <div id="recommendationsContent" class="text-gray-700"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="text-center space-x-4">
+                    <button onclick="downloadResults()" class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition">
+                        <i class="fas fa-download mr-2"></i>Download Report
+                    </button>
+                    <button onclick="shareResults()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                        <i class="fas fa-share mr-2"></i>Share Results
+                    </button>
+                    <button onclick="resetForm()" class="bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition">
+                        <i class="fas fa-redo mr-2"></i>Analyze Another
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h3 class="text-3xl font-bold text-gray-900 mb-4">Why Choose MedAI Summarizer?</h3>
+                <p class="text-gray-600">Professional-grade medical analysis powered by AI</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="text-center card-hover">
+                    <div class="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-brain text-2xl text-purple-600"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold text-gray-900 mb-2">AI-Powered Analysis</h4>
+                    <p class="text-gray-600">Advanced machine learning algorithms trained on medical literature</p>
+                </div>
+
+                <div class="text-center card-hover">
+                    <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-shield-alt text-2xl text-blue-600"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold text-gray-900 mb-2">HIPAA Compliant</h4>
+                    <p class="text-gray-600">Enterprise-grade security and privacy protection</p>
+                </div>
+
+                <div class="text-center card-hover">
+                    <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-clock text-2xl text-green-600"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold text-gray-900 mb-2">Instant Results</h4>
+                    <p class="text-gray-600">Get comprehensive analysis in seconds, not hours</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h3 class="text-3xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h3>
+                <p class="text-gray-600">Choose the plan that fits your needs</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Free Plan -->
+                <div class="bg-white rounded-lg shadow-lg p-8 border-2 border-gray-200">
+                    <h4 class="text-2xl font-bold text-gray-900 mb-4">Free</h4>
+                    <p class="text-4xl font-bold text-purple-600 mb-6">$0<span class="text-lg text-gray-500">/month</span></p>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>5 reports per month</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Basic summaries</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Email support</li>
+                    </ul>
+                    <button class="w-full bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition">Get Started</button>
+                </div>
+
+                <!-- Pro Plan -->
+                <div class="bg-white rounded-lg shadow-lg p-8 border-2 border-purple-500 transform scale-105">
+                    <div class="bg-purple-500 text-white px-4 py-2 rounded-full text-sm font-semibold mb-4 w-fit">Most Popular</div>
+                    <h4 class="text-2xl font-bold text-gray-900 mb-4">Pro</h4>
+                    <p class="text-4xl font-bold text-purple-600 mb-6">$29<span class="text-lg text-gray-500">/month</span></p>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>100 reports per month</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Advanced analysis</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Priority support</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Export to PDF</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition">Start Pro Trial</button>
+                </div>
+
+                <!-- Enterprise Plan -->
+                <div class="bg-white rounded-lg shadow-lg p-8 border-2 border-gray-200">
+                    <h4 class="text-2xl font-bold text-gray-900 mb-4">Enterprise</h4>
+                    <p class="text-4xl font-bold text-purple-600 mb-6">$99<span class="text-lg text-gray-500">/month</span></p>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Unlimited reports</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Custom integrations</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Dedicated support</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>API access</li>
+                    </ul>
+                    <button class="w-full bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition">Contact Sales</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <h5 class="text-lg font-semibold mb-4">MedAI Summarizer</h5>
+                    <p class="text-gray-400">Transforming medical reports into clear insights with AI</p>
+                </div>
+                <div>
+                    <h6 class="font-semibold mb-4">Product</h6>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition">Features</a></li>
+                        <li><a href="#" class="hover:text-white transition">Pricing</a></li>
+                        <li><a href="#" class="hover:text-white transition">API</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h6 class="font-semibold mb-4">Company</h6>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition">About</a></li>
+                        <li><a href="#" class="hover:text-white transition">Blog</a></li>
+                        <li><a href="#" class="hover:text-white transition">Careers</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h6 class="font-semibold mb-4">Support</h6>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition">Help Center</a></li>
+                        <li><a href="#" class="hover:text-white transition">Contact</a></li>
+                        <li><a href="#" class="hover:text-white transition">Privacy</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2024 MedAI Summarizer. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html> 

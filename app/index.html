@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedAI Summarizer - Medical Report Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .upload-area {
+            border: 2px dashed #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #8b5cf6;
+            background-color: #faf5ff;
+        }
+        .result-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .result-card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="app-container px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-heartbeat text-2xl text-purple-600"></i>
+                    <h1 class="text-xl font-semibold text-gray-900">MedAI Summarizer</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="apiStatus" class="text-sm px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                        <i class="fas fa-circle text-xs mr-1"></i>Checking API...
+                    </span>
+                    <button onclick="showSettings()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-container px-4 py-8">
+        <!-- Upload Section -->
+        <section id="uploadSection" class="mb-8">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Upload Medical Report</h2>
+                
+                <!-- File Upload -->
+                <div class="upload-area rounded-lg p-8 text-center mb-6">
+                    <i class="fas fa-file-medical text-4xl text-gray-400 mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Drop your medical report here</h3>
+                    <p class="text-gray-600 mb-4">or click to browse files</p>
+                    
+                    <input type="file" id="fileInput" accept=".txt,.pdf,.doc,.docx" class="hidden">
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-purple-700 transition">
+                        Choose File
+                    </button>
+                </div>
+
+                <!-- Text Input -->
+                <div class="mb-6">
+                    <label for="textInput" class="block text-sm font-medium text-gray-700 mb-2">
+                        Or paste text directly:
+                    </label>
+                    <textarea 
+                        id="textInput" 
+                        rows="6" 
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                        placeholder="Paste your medical report text here..."
+                    ></textarea>
+                </div>
+
+                <!-- Analysis Options -->
+                <div class="mb-6">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Analysis Options:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="summary" checked class="mr-2 text-purple-600">
+                            <span class="text-sm">Generate Summary</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="keyFindings" checked class="mr-2 text-purple-600">
+                            <span class="text-sm">Extract Key Findings</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="recommendations" class="mr-2 text-purple-600">
+                            <span class="text-sm">Generate Recommendations</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="text-center">
+                    <button id="analyzeBtn" onclick="analyzeReport()" class="bg-purple-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-magic mr-2"></i>Analyze Report
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="resultsSection" class="hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900">Analysis Results</h2>
+                    <button onclick="resetAnalysis()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loadingState" class="text-center py-12">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                    <p class="mt-4 text-gray-600">Analyzing your medical report...</p>
+                </div>
+
+                <!-- Results Content -->
+                <div id="resultsContent" class="hidden">
+                    <!-- Summary -->
+                    <div class="result-card p-6 mb-6">
+                        <div class="flex items-center mb-4">
+                            <i class="fas fa-file-alt text-xl text-purple-600 mr-3"></i>
+                            <h3 class="text-lg font-medium text-gray-900">Executive Summary</h3>
+                        </div>
+                        <div id="summaryContent" class="text-gray-700"></div>
+                    </div>
+
+                    <!-- Key Findings -->
+                    <div class="result-card p-6 mb-6">
+                        <div class="flex items-center mb-4">
+                            <i class="fas fa-search text-xl text-blue-600 mr-3"></i>
+                            <h3 class="text-lg font-medium text-gray-900">Key Findings</h3>
+                        </div>
+                        <div id="findingsContent" class="text-gray-700"></div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="result-card p-6 mb-6">
+                        <div class="flex items-center mb-4">
+                            <i class="fas fa-lightbulb text-xl text-yellow-600 mr-3"></i>
+                            <h3 class="text-lg font-medium text-gray-900">Recommendations</h3>
+                        </div>
+                        <div id="recommendationsContent" class="text-gray-700"></div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-wrap gap-3 justify-center">
+                        <button onclick="downloadResults()" class="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition">
+                            <i class="fas fa-download mr-2"></i>Download
+                        </button>
+                        <button onclick="copyResults()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition">
+                            <i class="fas fa-copy mr-2"></i>Copy
+                        </button>
+                        <button onclick="resetAnalysis()" class="bg-gray-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition">
+                            <i class="fas fa-redo mr-2"></i>New Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Settings</h3>
+                    <button onclick="hideSettings()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">API Endpoint</label>
+                        <input type="text" id="apiEndpoint" value="http://localhost:8000" class="w-full p-2 border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Default Summary Length</label>
+                        <select id="defaultLength" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="100">100 words</option>
+                            <option value="150" selected>150 words</option>
+                            <option value="200">200 words</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button onclick="hideSettings()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html> 

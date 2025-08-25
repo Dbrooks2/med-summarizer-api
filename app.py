@@ -1,226 +1,359 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import joblib
 import os
 import re
+import logging
+from datetime import datetime
 
-app = FastAPI(title="Medical Report Summarization API", version="1.0.0")
+# Import our enhanced AI service
+from ai_service import create_ai_service, load_or_build_index
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Enhanced Medical Report Summarization API", version="2.0.0")
 
 # Data models
 class SummarizeRequest(BaseModel):
     text: str
-    max_words: Optional[int] = 100
+    max_words: Optional[int] = 150
+    use_llama: Optional[bool] = True
+    extract_entities: Optional[bool] = True
 
 class RetrieveRequest(BaseModel):
     query: str
     top_k: Optional[int] = 5
+    similarity_threshold: Optional[float] = 0.3
 
 class RAGSummarizeRequest(BaseModel):
     query: str
     k: Optional[int] = 3
-    max_words: Optional[int] = 100
+    max_words: Optional[int] = 150
+    use_llama: Optional[bool] = True
 
 class BuildIndexRequest(BaseModel):
     csv_path: str
     text_column: Optional[str] = "transcription"
+    save_path: Optional[str] = "medical_index"
 
-# Global variables for loaded models
-tfidf_vectorizer = None
-retrieval_matrix = None
-retrieval_corpus = None
+class EnhancedSummarizeRequest(BaseModel):
+    text: str
+    max_words: Optional[int] = 150
+    include_entities: Optional[bool] = True
+    include_findings: Optional[bool] = True
+    include_recommendations: Optional[bool] = True
 
-def load_artifacts():
-    """Load the pre-built artifacts if they exist"""
-    global tfidf_vectorizer, retrieval_matrix, retrieval_corpus
-    
-    data_dir = "/mnt/data"
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir, exist_ok=True)
-        return False
-    
-    try:
-        tfidf_path = os.path.join(data_dir, "retrieval_tfidf.joblib")
-        matrix_path = os.path.join(data_dir, "retrieval_matrix.npz")
-        corpus_path = os.path.join(data_dir, "retrieval_corpus.csv")
-        
-        if all(os.path.exists(p) for p in [tfidf_path, matrix_path, corpus_path]):
-            tfidf_vectorizer = joblib.load(tfidf_path)
-            retrieval_matrix = np.load(matrix_path)['arr_0']
-            retrieval_corpus = pd.read_csv(corpus_path)
-            return True
-    except Exception as e:
-        print(f"Error loading artifacts: {e}")
-    
-    return False
-
-def extractive_summarize(text: str, max_words: int = 100) -> str:
-    """Simple extractive summarization using TF-IDF scoring"""
-    # Split into sentences
-    sentences = re.split(r'[.!?]+', text)
-    sentences = [s.strip() for s in sentences if s.strip()]
-    
-    if not sentences:
-        return text
-    
-    # Simple word frequency scoring
-    words = re.findall(r'\b\w+\b', text.lower())
-    word_freq = {}
-    for word in words:
-        if len(word) > 2:  # Skip very short words
-            word_freq[word] = word_freq.get(word, 0) + 1
-    
-    # Score sentences
-    sentence_scores = []
-    for sentence in sentences:
-        score = sum(word_freq.get(word.lower(), 0) for word in re.findall(r'\b\w+\b', sentence))
-        sentence_scores.append((score, sentence))
-    
-    # Sort by score and take top sentences
-    sentence_scores.sort(reverse=True)
-    
-    summary = []
-    word_count = 0
-    for _, sentence in sentence_scores:
-        sentence_words = len(re.findall(r'\b\w+\b', sentence))
-        if word_count + sentence_words <= max_words:
-            summary.append(sentence)
-            word_count += sentence_words
-        else:
-            break
-    
-    return '. '.join(summary) + ('.' if summary else '')
+# Global variables
+ai_service = None
+index_path = None
 
 @app.on_event("startup")
 async def startup_event():
-    """Load artifacts on startup"""
-    load_artifacts()
+    """Initialize AI service on startup"""
+    global ai_service
+    
+    try:
+        logger.info("Initializing Enhanced AI Service...")
+        
+        # Create AI service (will load models)
+        ai_service = create_ai_service()
+        
+        # Check if we have existing index
+        if os.path.exists("medical_index.faiss"):
+            try:
+                ai_service.load_faiss_index("medical_index")
+                logger.info("Loaded existing FAISS index")
+            except Exception as e:
+                logger.warning(f"Could not load existing index: {e}")
+        
+        logger.info("Enhanced AI Service initialized successfully!")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize AI service: {e}")
+        logger.info("API will run with limited functionality")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "artifacts_loaded": tfidf_vectorizer is not None}
+    """Enhanced health check with AI service status"""
+    global ai_service
+    
+    if ai_service:
+        model_info = ai_service.get_model_info()
+        return {
+            "status": "healthy",
+            "ai_service": {
+                "sentence_bert_loaded": model_info['sentence_bert_loaded'],
+                "llama_loaded": model_info['llama_loaded'],
+                "faiss_index_built": model_info['faiss_index_built'],
+                "corpus_size": model_info['corpus_size'],
+                "device": model_info['device']
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    else:
+        return {
+            "status": "degraded",
+            "ai_service": "not_available",
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/models")
+async def get_model_info():
+    """Get detailed information about loaded AI models"""
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    return ai_service.get_model_info()
+
+@app.post("/enhanced_summarize")
+async def enhanced_summarize(request: EnhancedSummarizeRequest):
+    """
+    Enhanced summarization using all AI components:
+    - LLaMA-2 for intelligent summarization
+    - Medical entity extraction
+    - Key findings identification
+    - Recommendations generation
+    """
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    try:
+        logger.info(f"Processing enhanced summary request for {len(request.text)} characters")
+        
+        # Generate comprehensive summary
+        result = ai_service.generate_enhanced_summary(
+            request.text, 
+            request.max_words
+        )
+        
+        # Filter results based on request
+        if not request.include_entities:
+            result.pop('entities', None)
+        if not request.include_findings:
+            result.pop('key_findings', None)
+        if not request.include_recommendations:
+            result.pop('recommendations', None)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Enhanced summarization error: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced summarization error: {str(e)}")
 
 @app.post("/summarize")
 async def summarize_text(request: SummarizeRequest):
-    """Summarize medical text using extractive summarization"""
+    """Enhanced summarization with LLaMA-2 fallback"""
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
-        summary = extractive_summarize(request.text, request.max_words)
-        return {
-            "summary": summary,
-            "original_length": len(request.text.split()),
-            "summary_length": len(summary.split()),
-            "max_words": request.max_words
-        }
+        if request.use_llama and ai_service.llama_model:
+            # Use LLaMA-2 for summarization
+            summary = ai_service.generate_llama_summary(request.text, request.max_words * 2)
+            
+            result = {
+                "summary": summary,
+                "original_length": len(request.text.split()),
+                "summary_length": len(summary.split()),
+                "max_words": request.max_words,
+                "model_used": "llama-2"
+            }
+            
+            # Extract entities if requested
+            if request.extract_entities:
+                entities = ai_service.extract_medical_entities(request.text)
+                result["entities"] = entities
+            
+            return result
+        else:
+            # Fallback to basic summarization
+            summary = ai_service._fallback_summarization(request.text, request.max_words)
+            
+            return {
+                "summary": summary,
+                "original_length": len(request.text.split()),
+                "summary_length": len(summary.split()),
+                "max_words": request.max_words,
+                "model_used": "fallback"
+            }
+            
     except Exception as e:
+        logger.error(f"Summarization error: {e}")
         raise HTTPException(status_code=500, detail=f"Summarization error: {str(e)}")
 
 @app.post("/retrieve")
 async def retrieve_documents(request: RetrieveRequest):
-    """Retrieve relevant documents using TF-IDF similarity"""
-    if tfidf_vectorizer is None:
-        raise HTTPException(status_code=400, detail="No retrieval index built. Use /build_index first.")
+    """Semantic document retrieval using FAISS and sentence-BERT"""
+    if not ai_service or not ai_service.faiss_index:
+        raise HTTPException(status_code=400, detail="No FAISS index built. Use /build_index first.")
     
     try:
-        # Transform query
-        query_vector = tfidf_vectorizer.transform([request.query])
+        # Perform semantic search
+        results = ai_service.semantic_search(
+            request.query, 
+            request.top_k
+        )
         
-        # Calculate similarities
-        similarities = cosine_similarity(query_vector, retrieval_matrix).flatten()
+        # Filter by similarity threshold
+        if request.similarity_threshold:
+            results = [r for r in results if r['similarity'] >= request.similarity_threshold]
         
-        # Get top k results
-        top_indices = np.argsort(similarities)[::-1][:request.top_k]
+        return {
+            "query": request.query,
+            "results": results,
+            "total_found": len(results),
+            "similarity_threshold": request.similarity_threshold
+        }
         
-        results = []
-        for idx in top_indices:
-            if similarities[idx] > 0:
-                results.append({
-                    "index": int(idx),
-                    "similarity": float(similarities[idx]),
-                    "text": retrieval_corpus.iloc[idx].iloc[0]  # First column should be text
-                })
-        
-        return {"query": request.query, "results": results}
     except Exception as e:
+        logger.error(f"Retrieval error: {e}")
         raise HTTPException(status_code=500, detail=f"Retrieval error: {str(e)}")
 
 @app.post("/rag_summarize")
 async def rag_summarize(request: RAGSummarizeRequest):
-    """RAG-based summarization: retrieve relevant docs then summarize"""
-    if tfidf_vectorizer is None:
-        raise HTTPException(status_code=400, detail="No retrieval index built. Use /build_index first.")
+    """RAG-based summarization using retrieved documents and LLaMA-2"""
+    if not ai_service or not ai_service.faiss_index:
+        raise HTTPException(status_code=400, detail="No FAISS index built. Use /build_index first.")
     
     try:
         # First retrieve relevant documents
-        query_vector = tfidf_vectorizer.transform([request.query])
-        similarities = cosine_similarity(query_vector, retrieval_matrix).flatten()
-        top_indices = np.argsort(similarities)[::-1][:request.k]
+        search_results = ai_service.semantic_search(request.query, request.k)
+        
+        if not search_results:
+            return {
+                "summary": "No relevant documents found for the query.",
+                "query": request.query,
+                "documents_retrieved": 0
+            }
         
         # Combine relevant texts
-        relevant_texts = []
-        for idx in top_indices:
-            if similarities[idx] > 0:
-                relevant_texts.append(retrieval_corpus.iloc[idx].iloc[0])
-        
-        if not relevant_texts:
-            return {"summary": "No relevant documents found.", "query": request.query}
-        
-        # Combine and summarize
+        relevant_texts = [result['text'] for result in search_results]
         combined_text = " ".join(relevant_texts)
-        summary = extractive_summarize(combined_text, request.max_words)
+        
+        # Generate summary
+        if request.use_llama and ai_service.llama_model:
+            summary = ai_service.generate_llama_summary(combined_text, request.max_words * 2)
+            model_used = "llama-2"
+        else:
+            summary = ai_service._fallback_summarization(combined_text, request.max_words)
+            model_used = "fallback"
         
         return {
             "summary": summary,
             "query": request.query,
             "documents_retrieved": len(relevant_texts),
-            "summary_length": len(summary.split()),
+            "search_results": search_results,
+            "model_used": model_used,
             "max_words": request.max_words
         }
+        
     except Exception as e:
+        logger.error(f"RAG summarization error: {e}")
         raise HTTPException(status_code=500, detail=f"RAG summarization error: {str(e)}")
 
 @app.post("/build_index")
-async def build_index(request: BuildIndexRequest):
-    """Build the retrieval index from a CSV file"""
+async def build_index(request: BuildIndexRequest, background_tasks: BackgroundTasks):
+    """Build FAISS index from CSV data using sentence-BERT embeddings"""
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
         # Check if CSV exists
         if not os.path.exists(request.csv_path):
             raise HTTPException(status_code=400, detail=f"CSV file not found: {request.csv_path}")
         
-        # Run the build script directly
-        import subprocess
-        import sys
+        # Read CSV data
+        df = pd.read_csv(request.csv_path)
+        text_column = request.text_column if request.text_column in df.columns else df.columns[0]
         
-        # Create data directory if it doesn't exist
-        os.makedirs("/mnt/data", exist_ok=True)
+        # Extract texts
+        texts = df[text_column].astype(str).tolist()
+        texts = [text for text in texts if text.strip() and text.lower() != 'nan']
         
-        # Run the build script
-        result = subprocess.run([
-            sys.executable, 
-            "scripts/build_index.py",
-            "--csv", request.csv_path,
-            "--text-col", request.text_column,
-            "--out-dir", "/mnt/data"
-        ], capture_output=True, text=True)
+        if not texts:
+            raise HTTPException(status_code=400, detail="No valid text data found in CSV")
         
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Build script failed: {result.stderr}")
+        # Build index in background to avoid blocking
+        def build_index_task():
+            try:
+                global index_path
+                index_path = ai_service.build_faiss_index(texts, request.save_path)
+                logger.info(f"FAISS index built successfully: {index_path}")
+            except Exception as e:
+                logger.error(f"Background index building failed: {e}")
         
-        # Reload artifacts
-        load_artifacts()
+        background_tasks.add_task(build_index_task)
         
         return {
-            "message": "Index built successfully",
+            "message": "Index building started in background",
             "csv_path": request.csv_path,
-            "text_column": request.text_column,
-            "artifacts_loaded": tfidf_vectorizer is not None
+            "text_column": text_column,
+            "texts_count": len(texts),
+            "save_path": request.save_path,
+            "status": "building"
+        }
+        
+    except Exception as e:
+        logger.error(f"Index building error: {e}")
+        raise HTTPException(status_code=500, detail=f"Index building error: {str(e)}")
+
+@app.get("/index_status")
+async def get_index_status():
+    """Get current FAISS index status"""
+    if not ai_service:
+        return {"status": "ai_service_not_available"}
+    
+    try:
+        if ai_service.faiss_index:
+            return {
+                "status": "ready",
+                "corpus_size": len(ai_service.medical_corpus) if ai_service.medical_corpus else 0,
+                "index_type": "faiss",
+                "dimension": ai_service.faiss_index.d if hasattr(ai_service.faiss_index, 'd') else None
+            }
+        else:
+            return {"status": "no_index_built"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.post("/extract_entities")
+async def extract_medical_entities(text: str):
+    """Extract medical entities from text using spaCy and custom patterns"""
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    try:
+        entities = ai_service.extract_medical_entities(text)
+        return {
+            "text": text,
+            "entities": entities,
+            "total_entities": sum(len(v) for v in entities.values())
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Index building error: {str(e)}")
+        logger.error(f"Entity extraction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Entity extraction error: {str(e)}")
+
+@app.post("/semantic_search")
+async def semantic_search(request: RetrieveRequest):
+    """Direct semantic search endpoint"""
+    if not ai_service or not ai_service.faiss_index:
+        raise HTTPException(status_code=400, detail="No FAISS index built. Use /build_index first.")
+    
+    try:
+        results = ai_service.semantic_search(request.query, request.top_k)
+        return {
+            "query": request.query,
+            "results": results,
+            "total_found": len(results)
+        }
+    except Exception as e:
+        logger.error(f"Semantic search error: {e}")
+        raise HTTPException(status_code=500, detail=f"Semantic search error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

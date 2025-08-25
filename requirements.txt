@@ -6,3 +6,24 @@ pandas
 scikit-learn
 scipy
 joblib
+
+# Enhanced AI/ML Dependencies
+faiss-cpu>=1.7.4
+sentence-transformers>=2.2.2
+torch>=2.0.0
+transformers>=4.30.0
+accelerate>=0.20.0
+bitsandbytes>=0.41.0
+datasets>=2.12.0
+
+# Additional ML libraries
+scikit-learn>=1.3.0
+nltk>=3.8.1
+spacy>=3.6.0
+textstat>=0.7.3
+
+# Utilities
+python-multipart
+aiofiles
+redis>=4.5.0
+psycopg2-binary>=2.9.0
