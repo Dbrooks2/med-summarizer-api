@@ -1,7 +1,7 @@
 // Enhanced MedAI Summarizer - Full AI Integration
 class EnhancedMedAISummarizer {
     constructor() {
-        this.apiBaseUrl = 'http://localhost:8000';
+        this.apiBaseUrl = 'http://localhost:8001';
         this.currentAnalysis = null;
         this.settings = this.loadSettings();
         this.aiCapabilities = {};
@@ -751,7 +751,7 @@ class EnhancedMedAISummarizer {
     // Settings management
     loadSettings() {
         const defaultSettings = {
-            apiEndpoint: 'http://localhost:8000',
+            apiEndpoint: 'http://localhost:8001',
             defaultLength: 150
         };
         

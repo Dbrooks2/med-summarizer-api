@@ -27,3 +27,7 @@ python-multipart
 aiofiles
 redis>=4.5.0
 psycopg2-binary>=2.9.0
+
+# MLflow and Experiment Tracking
+mlflow>=2.8.0
+psutil>=5.9.0

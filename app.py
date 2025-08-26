@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import numpy as np
@@ -12,17 +14,27 @@ from datetime import datetime
 # Import our enhanced AI service
 from ai_service import create_ai_service, load_or_build_index
 
+# Import MLflow configuration
+try:
+    from mlflow_config import mlflow_config
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Enhanced Medical Report Summarization API", version="2.0.0")
 
+# Mount static files
+app.mount("/app", StaticFiles(directory="app"), name="app")
+
 # Data models
 class SummarizeRequest(BaseModel):
     text: str
     max_words: Optional[int] = 150
-    use_llama: Optional[bool] = True
+    use_language_model: Optional[bool] = True
     extract_entities: Optional[bool] = True
 
 class RetrieveRequest(BaseModel):
@@ -34,7 +46,7 @@ class RAGSummarizeRequest(BaseModel):
     query: str
     k: Optional[int] = 3
     max_words: Optional[int] = 150
-    use_llama: Optional[bool] = True
+    use_language_model: Optional[bool] = True
 
 class BuildIndexRequest(BaseModel):
     csv_path: str
@@ -51,6 +63,11 @@ class EnhancedSummarizeRequest(BaseModel):
 # Global variables
 ai_service = None
 index_path = None
+
+@app.get("/")
+async def read_root():
+    """Serve the main HTML file"""
+    return FileResponse("app/index.html")
 
 @app.on_event("startup")
 async def startup_event():
@@ -89,6 +106,7 @@ async def health_check():
             "ai_service": {
                 "sentence_bert_loaded": model_info['sentence_bert_loaded'],
                 "llama_loaded": model_info['llama_loaded'],
+                "language_model_loaded": model_info['language_model_loaded'],
                 "faiss_index_built": model_info['faiss_index_built'],
                 "corpus_size": model_info['corpus_size'],
                 "device": model_info['device']
@@ -114,7 +132,7 @@ async def get_model_info():
 async def enhanced_summarize(request: EnhancedSummarizeRequest):
     """
     Enhanced summarization using all AI components:
-    - LLaMA-2 for intelligent summarization
+    - Language model for intelligent summarization
     - Medical entity extraction
     - Key findings identification
     - Recommendations generation
@@ -147,21 +165,21 @@ async def enhanced_summarize(request: EnhancedSummarizeRequest):
 
 @app.post("/summarize")
 async def summarize_text(request: SummarizeRequest):
-    """Enhanced summarization with LLaMA-2 fallback"""
+    """Enhanced summarization with language model fallback"""
     if not ai_service:
         raise HTTPException(status_code=503, detail="AI service not available")
     
     try:
-        if request.use_llama and ai_service.llama_model:
-            # Use LLaMA-2 for summarization
-            summary = ai_service.generate_llama_summary(request.text, request.max_words * 2)
+        if request.use_language_model and ai_service.language_model:
+            # Use language model for summarization
+            summary = ai_service.generate_language_summary(request.text, request.max_words * 2)
             
             result = {
                 "summary": summary,
                 "original_length": len(request.text.split()),
                 "summary_length": len(summary.split()),
                 "max_words": request.max_words,
-                "model_used": "llama-2"
+                "model_used": "llama-2" if "llama" in ai_service.model_path.lower() else "open-source"
             }
             
             # Extract entities if requested
@@ -216,7 +234,7 @@ async def retrieve_documents(request: RetrieveRequest):
 
 @app.post("/rag_summarize")
 async def rag_summarize(request: RAGSummarizeRequest):
-    """RAG-based summarization using retrieved documents and LLaMA-2"""
+    """RAG-based summarization using retrieved documents and language model"""
     if not ai_service or not ai_service.faiss_index:
         raise HTTPException(status_code=400, detail="No FAISS index built. Use /build_index first.")
     
@@ -236,9 +254,9 @@ async def rag_summarize(request: RAGSummarizeRequest):
         combined_text = " ".join(relevant_texts)
         
         # Generate summary
-        if request.use_llama and ai_service.llama_model:
-            summary = ai_service.generate_llama_summary(combined_text, request.max_words * 2)
-            model_used = "llama-2"
+        if request.use_language_model and ai_service.language_model:
+            summary = ai_service.generate_language_summary(combined_text, request.max_words * 2)
+            model_used = "llama-2" if "llama" in ai_service.model_path.lower() else "open-source"
         else:
             summary = ai_service._fallback_summarization(combined_text, request.max_words)
             model_used = "fallback"
@@ -354,6 +372,86 @@ async def semantic_search(request: RetrieveRequest):
     except Exception as e:
         logger.error(f"Semantic search error: {e}")
         raise HTTPException(status_code=500, detail=f"Semantic search error: {str(e)}")
+
+# MLflow Experiment Management Endpoints
+@app.get("/mlflow/experiments")
+async def get_mlflow_experiments():
+    """Get list of MLflow experiments"""
+    if not MLFLOW_AVAILABLE:
+        raise HTTPException(status_code=503, detail="MLflow not available")
+    
+    try:
+        experiments = mlflow_config.client.list_experiments()
+        return {
+            "experiments": [
+                {
+                    "experiment_id": exp.experiment_id,
+                    "name": exp.name,
+                    "artifact_location": exp.artifact_location,
+                    "lifecycle_stage": exp.lifecycle_stage
+                }
+                for exp in experiments
+            ]
+        }
+    except Exception as e:
+        logger.error(f"MLflow experiments error: {e}")
+        raise HTTPException(status_code=500, detail=f"MLflow error: {str(e)}")
+
+@app.get("/mlflow/runs/{experiment_name}")
+async def get_mlflow_runs(experiment_name: str, limit: int = 10):
+    """Get recent runs for a specific experiment"""
+    if not MLFLOW_AVAILABLE:
+        raise HTTPException(status_code=503, detail="MLflow not available")
+    
+    try:
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if not experiment:
+            raise HTTPException(status_code=404, detail=f"Experiment '{experiment_name}' not found")
+        
+        runs = mlflow.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            max_results=limit,
+            order_by=["start_time DESC"]
+        )
+        
+        return {
+            "experiment_name": experiment_name,
+            "runs": [
+                {
+                    "run_id": run.info.run_id,
+                    "run_name": run.data.tags.get("mlflow.runName", "Unnamed"),
+                    "start_time": run.info.start_time,
+                    "end_time": run.info.end_time,
+                    "status": run.info.status,
+                    "metrics": run.data.metrics,
+                    "params": run.data.params
+                }
+                for _, run in runs.iterrows()
+            ]
+        }
+    except Exception as e:
+        logger.error(f"MLflow runs error: {e}")
+        raise HTTPException(status_code=500, detail=f"MLflow error: {str(e)}")
+
+@app.get("/mlflow/status")
+async def get_mlflow_status():
+    """Get MLflow system status"""
+    if not MLFLOW_AVAILABLE:
+        return {"status": "not_available", "message": "MLflow not installed or configured"}
+    
+    try:
+        tracking_uri = mlflow.get_tracking_uri()
+        experiment = mlflow.get_experiment_by_name("medical-summarizer")
+        
+        return {
+            "status": "available",
+            "tracking_uri": tracking_uri,
+            "experiment_name": "medical-summarizer",
+            "experiment_id": experiment.experiment_id if experiment else None,
+            "active_run": mlflow.active_run() is not None
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

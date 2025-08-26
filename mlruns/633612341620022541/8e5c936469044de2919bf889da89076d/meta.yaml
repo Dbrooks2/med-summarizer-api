@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/danie/Med-Summarizer-Ai/med-summarizer-api/mlruns/633612341620022541/8e5c936469044de2919bf889da89076d/artifacts
+end_time: 1756157972720
+entry_point_name: ''
+experiment_id: '633612341620022541'
+lifecycle_stage: active
+run_id: 8e5c936469044de2919bf889da89076d
+run_name: model_loading
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1756157964119
+status: 3
+tags: []
+user_id: danie

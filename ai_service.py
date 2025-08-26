@@ -1,6 +1,6 @@
 """
 Enhanced AI Service for Medical Summarization
-Integrates FAISS, sentence-BERT, and LLaMA-2 for advanced text processing
+Integrates FAISS, sentence-BERT, and open source language models for advanced text processing
 """
 
 import os
@@ -18,7 +18,6 @@ import torch
 from transformers import (
     AutoTokenizer, 
     AutoModelForCausalLM, 
-    BitsAndBytesConfig,
     pipeline,
     GenerationConfig
 )
@@ -34,20 +33,28 @@ import textstat
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# MLflow integration
+try:
+    from mlflow_config import mlflow_config
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+    logger.warning("MLflow not available. Experiment tracking disabled.")
+
 class EnhancedAIService:
     """
-    Advanced AI service combining FAISS, sentence-BERT, and LLaMA-2
+    Advanced AI service combining FAISS, sentence-BERT, and open source language models
     for medical text processing and summarization
     """
     
     def __init__(self, model_path: str = None, device: str = None):
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_path = model_path or "meta-llama/Llama-2-7b-chat-hf"
+        self.model_path = model_path or "microsoft/DialoGPT-medium"  # Open source alternative
         
         # Initialize models
         self.sentence_model = None
-        self.llama_model = None
-        self.llama_tokenizer = None
+        self.language_model = None
+        self.language_tokenizer = None
         self.faiss_index = None
         self.medical_corpus = None
         
@@ -71,57 +78,120 @@ class EnhancedAIService:
     
     def _load_models(self):
         """Load and initialize all AI models"""
+        # Start MLflow run for model loading
+        if MLFLOW_AVAILABLE:
+            mlflow_config.start_run("model_loading", {"task": "model_initialization"})
+            mlflow_config.log_parameters({
+                "device": self.device,
+                "model_path": self.model_path,
+                "timestamp": datetime.now().isoformat()
+            })
+        
         try:
             logger.info("Loading sentence-BERT model...")
             self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2', device=self.device)
             
-            logger.info("Loading LLaMA-2 model...")
-            self._load_llama_model()
+            logger.info("Loading language model...")
+            self._load_language_model()
             
             logger.info("All models loaded successfully!")
             
+            # Log successful model loading
+            if MLFLOW_AVAILABLE:
+                mlflow_config.log_metrics({
+                    "models_loaded": 1,
+                    "sentence_bert_loaded": 1,
+                    "language_model_loaded": 1 if self.language_model else 0
+                })
+                mlflow_config.end_run()
+            
         except Exception as e:
             logger.error(f"Error loading models: {e}")
+            if MLFLOW_AVAILABLE:
+                mlflow_config.log_metrics({"models_loaded": 0, "error": 1})
+                mlflow_config.end_run()
             raise
+    
+    def _load_language_model(self):
+        """Load language model (LLaMA-2 if available, otherwise open source alternative)"""
+        try:
+            # Try to load LLaMA-2 first if token is available
+            if os.getenv("HUGGINGFACE_TOKEN"):
+                try:
+                    logger.info("Attempting to load LLaMA-2 model...")
+                    self._load_llama_model()
+                    return
+                except Exception as e:
+                    logger.warning(f"Could not load LLaMA-2 model: {e}")
+                    logger.info("Falling back to open source alternative")
+            
+            # Load open source alternative
+            logger.info("Loading open source language model...")
+            self._load_open_source_model()
+            
+        except Exception as e:
+            logger.warning(f"Could not load language model: {e}")
+            logger.info("Running with basic summarization methods only")
+            self.language_model = None
+            self.language_tokenizer = None
     
     def _load_llama_model(self):
         """Load LLaMA-2 model with quantization for efficiency"""
         try:
-            # Quantization config for memory efficiency
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.bfloat16
-            )
+            # Try to load LLaMA-2
+            model_path = "meta-llama/Llama-2-7b-chat-hf"
             
             # Load tokenizer
-            self.llama_tokenizer = AutoTokenizer.from_pretrained(
-                self.model_path,
+            self.language_tokenizer = AutoTokenizer.from_pretrained(
+                model_path,
                 trust_remote_code=True,
                 use_auth_token=os.getenv("HUGGINGFACE_TOKEN")
             )
             
-            # Load model with quantization
-            self.llama_model = AutoModelForCausalLM.from_pretrained(
-                self.model_path,
-                quantization_config=bnb_config,
+            # Load model
+            self.language_model = AutoModelForCausalLM.from_pretrained(
+                model_path,
                 device_map="auto",
                 trust_remote_code=True,
                 use_auth_token=os.getenv("HUGGINGFACE_TOKEN")
             )
             
             # Set padding token
-            if self.llama_tokenizer.pad_token is None:
-                self.llama_tokenizer.pad_token = self.llama_tokenizer.eos_token
+            if self.language_tokenizer.pad_token is None:
+                self.language_tokenizer.pad_token = self.language_tokenizer.eos_token
             
+            self.model_path = model_path
             logger.info("LLaMA-2 model loaded successfully!")
             
         except Exception as e:
-            logger.warning(f"Could not load LLaMA-2 model: {e}")
-            logger.info("Falling back to basic summarization methods")
-            self.llama_model = None
-            self.llama_tokenizer = None
+            logger.warning(f"LLaMA-2 loading failed: {e}")
+            raise
+    
+    def _load_open_source_model(self):
+        """Load open source language model"""
+        try:
+            # Load tokenizer
+            self.language_tokenizer = AutoTokenizer.from_pretrained(
+                self.model_path,
+                trust_remote_code=True
+            )
+            
+            # Load model
+            self.language_model = AutoModelForCausalLM.from_pretrained(
+                self.model_path,
+                device_map="auto",
+                trust_remote_code=True
+            )
+            
+            # Set padding token
+            if self.language_tokenizer.pad_token is None:
+                self.language_tokenizer.pad_token = self.language_tokenizer.eos_token
+            
+            logger.info(f"Open source model {self.model_path} loaded successfully!")
+            
+        except Exception as e:
+            logger.warning(f"Open source model loading failed: {e}")
+            raise
     
     def build_faiss_index(self, texts: List[str], save_path: str = None) -> str:
         """
@@ -216,9 +286,9 @@ class EnhancedAIService:
             logger.error(f"Error in semantic search: {e}")
             raise
     
-    def generate_llama_summary(self, text: str, max_length: int = 200) -> str:
+    def generate_language_summary(self, text: str, max_length: int = 200) -> str:
         """
-        Generate summary using LLaMA-2 model
+        Generate summary using available language model
         
         Args:
             text: Input text to summarize
@@ -227,41 +297,53 @@ class EnhancedAIService:
         Returns:
             Generated summary
         """
-        if self.llama_model is None:
-            raise ValueError("LLaMA-2 model not loaded")
+        if self.language_model is None:
+            raise ValueError("Language model not loaded")
         
         try:
             # Create prompt for medical summarization
-            prompt = f"""<s>[INST] You are a medical professional. Please provide a concise, accurate summary of the following medical report. Focus on key findings, diagnoses, and recommendations. Keep the summary under {max_length} words.
+            if "llama" in self.model_path.lower():
+                # LLaMA-2 style prompt
+                prompt = f"""<s>[INST] You are a medical professional. Please provide a concise, accurate summary of the following medical report. Focus on key findings, diagnoses, and recommendations. Keep the summary under {max_length} words.
 
 Medical Report:
 {text}
 
 Summary: [/INST]"""
+            else:
+                # Open source model prompt
+                prompt = f"""Medical Report Summary Task:
+
+You are a medical professional. Please provide a concise, accurate summary of the following medical report. Focus on key findings, diagnoses, and recommendations. Keep the summary under {max_length} words.
+
+Medical Report:
+{text}
+
+Summary:"""
             
             # Tokenize input
-            inputs = self.llama_tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+            inputs = self.language_tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
             inputs = inputs.to(self.device)
             
             # Generate summary
             with torch.no_grad():
-                outputs = self.llama_model.generate(
+                outputs = self.language_model.generate(
                     **inputs,
                     max_new_tokens=max_length,
                     temperature=0.7,
                     do_sample=True,
-                    pad_token_id=self.llama_tokenizer.eos_token_id,
-                    eos_token_id=self.llama_tokenizer.eos_token_id
+                    pad_token_id=self.language_tokenizer.eos_token_id,
+                    eos_token_id=self.language_tokenizer.eos_token_id
                 )
             
             # Decode and clean output
-            summary = self.llama_tokenizer.decode(outputs[0], skip_special_tokens=True)
+            summary = self.language_tokenizer.decode(outputs[0], skip_special_tokens=True)
             summary = summary.replace(prompt, "").strip()
             
             return summary
             
         except Exception as e:
-            logger.error(f"Error generating LLaMA summary: {e}")
+            logger.error(f"Error generating language summary: {e}")
             raise
     
     def extract_medical_entities(self, text: str) -> Dict[str, List[str]]:
@@ -339,6 +421,16 @@ Summary: [/INST]"""
         Returns:
             Dictionary containing summary and extracted information
         """
+        # Start MLflow run for summarization
+        if MLFLOW_AVAILABLE:
+            mlflow_config.start_run("enhanced_summarization", {"task": "medical_summarization"})
+            mlflow_config.log_parameters({
+                "max_words": max_words,
+                "text_length": len(text),
+                "model_path": self.model_path,
+                "device": self.device
+            })
+        
         try:
             result = {
                 'summary': '',
@@ -348,12 +440,12 @@ Summary: [/INST]"""
                 'metadata': {}
             }
             
-            # Generate LLaMA-2 summary if available
-            if self.llama_model:
+            # Generate language model summary if available
+            if self.language_model:
                 try:
-                    result['summary'] = self.generate_llama_summary(text, max_words * 2)
+                    result['summary'] = self.generate_language_summary(text, max_words * 2)
                 except Exception as e:
-                    logger.warning(f"LLaMA summary failed, using fallback: {e}")
+                    logger.warning(f"Language model summary failed, using fallback: {e}")
                     result['summary'] = self._fallback_summarization(text, max_words)
             else:
                 result['summary'] = self._fallback_summarization(text, max_words)
@@ -373,13 +465,27 @@ Summary: [/INST]"""
                 'summary_length': len(result['summary'].split()),
                 'entities_found': sum(len(v) for v in result['entities'].values()),
                 'generated_at': datetime.now().isoformat(),
-                'model_used': 'llama-2' if self.llama_model else 'fallback'
+                'model_used': 'llama-2' if 'llama' in self.model_path.lower() else 'open-source'
             }
+            
+            # Log MLflow metrics
+            if MLFLOW_AVAILABLE:
+                mlflow_config.log_metrics({
+                    "word_count": result['metadata']['word_count'],
+                    "summary_length": result['metadata']['summary_length'],
+                    "entities_found": result['metadata']['entities_found'],
+                    "success": 1
+                })
+                mlflow_config.log_text(result['summary'], "summary.txt")
+                mlflow_config.end_run()
             
             return result
             
         except Exception as e:
             logger.error(f"Error generating enhanced summary: {e}")
+            if MLFLOW_AVAILABLE:
+                mlflow_config.log_metrics({"success": 0, "error": 1})
+                mlflow_config.end_run()
             raise
     
     def _fallback_summarization(self, text: str, max_words: int) -> str:
@@ -485,13 +591,14 @@ Summary: [/INST]"""
         """Get information about loaded models"""
         return {
             'sentence_bert_loaded': self.sentence_model is not None,
-            'llama_loaded': self.llama_model is not None,
+            'llama_loaded': self.language_model is not None and 'llama' in self.model_path.lower(),
+            'language_model_loaded': self.language_model is not None,
             'faiss_index_built': self.faiss_index is not None,
             'corpus_size': len(self.medical_corpus) if self.medical_corpus else 0,
             'device': self.device,
             'models': {
                 'sentence_transformer': 'all-MiniLM-L6-v2',
-                'llama': self.model_path if self.llama_model else None
+                'language_model': self.model_path if self.language_model else None
             }
         }
 

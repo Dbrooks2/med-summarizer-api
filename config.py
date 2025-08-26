@@ -9,7 +9,7 @@ class Config:
     """Configuration class for AI service settings"""
     
     # Model paths and configurations
-    LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", "meta-llama/Llama-2-7b-chat-hf")
+    LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", "microsoft/DialoGPT-medium")  # Open source alternative
     SENTENCE_TRANSFORMER_MODEL = os.getenv("SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
     
     # HuggingFace settings
@@ -21,7 +21,7 @@ class Config:
     DEVICE = "cpu" if FORCE_CPU else ("cuda" if os.getenv("CUDA_AVAILABLE", "true").lower() == "true" else "cpu")
     
     # Model quantization settings
-    USE_4BIT_QUANTIZATION = os.getenv("USE_4BIT_QUANTIZATION", "true").lower() == "true"
+    USE_4BIT_QUANTIZATION = os.getenv("USE_4BIT_QUANTIZATION", "false").lower() == "true"  # Disabled for open source models
     USE_8BIT_QUANTIZATION = os.getenv("USE_8BIT_QUANTIZATION", "false").lower() == "true"
     
     # FAISS index settings
@@ -41,8 +41,8 @@ class Config:
         'temperature', 'oxygen saturation', 'respiratory rate'
     ]
     
-    # LLaMA-2 generation settings
-    LLAMA_GENERATION_CONFIG = {
+    # Open source model generation settings
+    OPEN_SOURCE_GENERATION_CONFIG = {
         "max_new_tokens": 512,
         "temperature": 0.7,
         "top_p": 0.9,
@@ -99,7 +99,7 @@ class Config:
         try:
             # Check required environment variables
             if not cls.HUGGINGFACE_TOKEN:
-                print("Warning: HUGGINGFACE_TOKEN not set. LLaMA-2 model may not load.")
+                print("Warning: HUGGINGFACE_TOKEN not set. Using open source alternatives.")
             
             # Validate numeric settings
             if cls.DEFAULT_SUMMARY_LENGTH <= 0:

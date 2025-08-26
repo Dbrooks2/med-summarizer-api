@@ -1,7 +1,7 @@
 // MedAI Summarizer - Functional Application
 class MedAISummarizer {
     constructor() {
-        this.apiBaseUrl = 'http://localhost:8000';
+        const API_BASE_URL = 'http://localhost:8001';
         this.currentAnalysis = null;
         this.settings = this.loadSettings();
         this.init();
@@ -417,7 +417,7 @@ class MedAISummarizer {
     // Settings management
     loadSettings() {
         const defaultSettings = {
-            apiEndpoint: 'http://localhost:8000',
+            apiEndpoint: 'http://localhost:8001',
             defaultLength: 150
         };
         
